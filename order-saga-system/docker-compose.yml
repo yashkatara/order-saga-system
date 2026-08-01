@@ -1,0 +1,114 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  order-service:
+    build: ./services/order-service
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: order_db
+      PORT: 4001
+    ports: ["4001:4001"]
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  inventory-service:
+    build: ./services/inventory-service
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: inventory_db
+      PORT: 4002
+    ports: ["4002:4002"]
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  payment-service:
+    build: ./services/payment-service
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: payment_db
+      PORT: 4003
+    ports: ["4003:4003"]
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  shipping-service:
+    build: ./services/shipping-service
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: shipping_db
+      PORT: 4004
+    ports: ["4004:4004"]
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  coordinator:
+    build: ./services/coordinator
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: coordinator_db
+      PORT: 4000
+      ORDER_SERVICE_URL: http://order-service:4001
+      INVENTORY_SERVICE_URL: http://inventory-service:4002
+      PAYMENT_SERVICE_URL: http://payment-service:4003
+      SHIPPING_SERVICE_URL: http://shipping-service:4004
+      # Two instances (see `docker compose up --scale coordinator=2`) will
+      # safely share the same order queue -- see worker.js.
+      WORKER_CONCURRENCY: 20
+      CLAIM_BATCH_SIZE: 50
+    ports: ["4000:4000"]
+    depends_on:
+      mysql: { condition: service_healthy }
+      order-service: { condition: service_started }
+      inventory-service: { condition: service_started }
+      payment-service: { condition: service_started }
+      shipping-service: { condition: service_started }
+
+  notification-service:
+    build: ./services/notification-service
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: notification_db
+      PORT: 4005
+      COORDINATOR_URL: http://coordinator:4000
+      JOB_INTERVAL_MS: 900000 # 15 minutes
+    ports: ["4005:4005"]
+    depends_on:
+      mysql: { condition: service_healthy }
+      coordinator: { condition: service_started }
+
+  frontend:
+    build: ./frontend
+    ports: ["4200:80"]
+    depends_on:
+      - coordinator
+
+volumes:
+  mysql_data:

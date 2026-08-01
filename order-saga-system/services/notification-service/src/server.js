@@ -34,15 +34,7 @@ async function fetchAllShippedOrderIds() {
   return ids;
 }
 
-// The exactly-once guarantee:
-//   1. INSERT IGNORE registers the order the first time we ever see it
-//      shipped -- harmless no-op on every later run.
-//   2. UPDATE ... WHERE sent_at IS NULL is an atomic, row-locking claim.
-//      If two instances of this service (or two overlapping cron firings)
-//      race on the same order, only one UPDATE actually matches a row
-//      (affectedRows = 1); the other gets 0 and does nothing further.
-// So each shipped order is notified exactly once, no matter how many times
-// the job runs or how many copies of the service are running.
+
 async function runJob() {
   const shippedIds = await fetchAllShippedOrderIds();
   if (shippedIds.length === 0) {

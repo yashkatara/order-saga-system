@@ -14,15 +14,7 @@ function createPool() {
   });
 }
 
-// Every downstream service (order/inventory/payment/shipping) exposes
-// DO and UNDO for its one step. Both are wrapped with this helper so that:
-//   1. A retried call with the same idempotency_key never re-applies the effect
-//      (looks up the ledger and replays the stored result instead).
-//   2. fail_at / comp_fail_at from the CSV can force a deterministic failure,
-//      so the assignment's "some rows are marked to fail on purpose" behaviour
-//      is honoured without special-casing it in the coordinator.
-//   3. A short artificial delay + the caller's timeout together let the
-//      coordinator's "slow reply treated as failed" rule be demonstrated.
+
 function withIdempotency(pool, { stepName }) {
   return async function idempotentHandler(req, res, effectFn) {
     const { orderId } = req.params;
